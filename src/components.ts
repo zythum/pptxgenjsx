@@ -1,8 +1,13 @@
 /**
  * Component factory definitions for pptxgenjsx.
  *
- * Each component factory creates a PptxNode with a specific type tag.
- * All positioning values are in inches (canvas: 13.333 x 7.5 for WIDE).
+ * Each component factory creates a tagged PptxNode that the renderer later
+ * maps to the corresponding PptxGenJS method.
+ *
+ * All positioning / sizing values are in inches.
+ * Default canvas: 13.333 x 7.5 (WIDE).
+ *
+ * @module components
  */
 
 import type PptxGenJSType from "pptxgenjs";
@@ -24,6 +29,12 @@ export type { PptxNode, PptxNodePromise };
 
 // ── Presentation ──────────────────────────────────────────────────
 
+/** Props for the root `<Deck>` / `<Presentation>` component.
+ *
+ * Maps presentation-level metadata, layout, themes, and slide masters
+ * to the underlying `new PptxGenJS()` constructor and `pptx.defineLayout`,
+ * `pptx.defineSlideMaster`, etc.
+ */
 export type DeckProps = {
   /** Presentation title metadata. */
   title?: string;
@@ -47,11 +58,15 @@ export type DeckProps = {
   masters?: PptxGenJSType.SlideMasterProps[];
   /** Presentation sections passed to `pptx.addSection`. */
   sections?: PptxGenJSType.SectionProps[];
+  /** Child nodes — typically `<Slide />`, `<Layout />`, `<Master />`, `<Section />`. */
   children?: PptxChildren;
 };
 
-// ── Structure ─────────────────────────────────────────────────────
+// ── Structure: Slide, Layout, Section, Master, Placeholder ───────
 
+/** Props for `<Slide>`. Maps to `pptx.addSlide()`.
+ * Supports background, visibility, slide number format, and layout selection.
+ */
 export type SlideProps = Partial<
   Pick<PptxGenJSType.PresSlide, "background" | "color" | "hidden" | "slideNumber">
 > &
@@ -59,56 +74,85 @@ export type SlideProps = Partial<
     children?: PptxChildren;
   };
 
+/** Props for `<Layout>`. Maps to `pptx.defineLayout()`. */
 export type LayoutProps = PptxGenJSType.PresLayout;
 
+/** Props for `<Section>`. Maps to `pptx.addSection()`. */
 export type SectionProps = PptxGenJSType.SectionProps & {
   children?: PptxChildren;
 };
 
+/** Props for `<Master>`. Maps to `pptx.defineSlideMaster()`. */
 export type MasterProps = PptxGenJSType.SlideMasterProps & {
   children?: PptxChildren;
 };
 
+/** Props for `<Placeholder>` (inside `<Master>`).
+ * Maps to `SlideMasterProps.objects[].placeholder` entries.
+ */
 export type PlaceholderProps = {
   /** Placeholder options used inside `defineSlideMaster({ objects })`. */
   options: PptxGenJSType.PlaceholderProps;
-  /** Placeholder text shown until edited. Children strings are joined when `text` is omitted. */
+  /** Placeholder text shown until edited. Falls back to children strings. */
   text?: string;
   children?: PptxChildren;
 };
 
-// ── Text ──────────────────────────────────────────────────────────
+// ── Text & Notes ─────────────────────────────────────────────────
 
+/** Props for `<TextRun>` — a single formatted run inside `<Text>`.
+ * Maps to an entry in the `TextProps[]` array passed to `slide.addText()`.
+ */
 export type TextRunProps = PptxGenJSType.TextProps;
 
+/** Props for `<Text>` — a text box, rich text container, or text inside a shape.
+ * Maps to `slide.addText(text, options)`.
+ *
+ * Provide text via the `text` prop, as child `<TextRun />` nodes, as
+ * plain-string children, or via the `runs` prop for rich text arrays.
+ */
 export type TextProps = Omit<PptxGenJSType.TextPropsOptions, "children"> & {
-  /** Text string passed as first argument to `slide.addText`. Children strings are joined when `text` is omitted. */
+  /** Text string or rich-text array passed to `slide.addText`. Falls back to children strings. */
   text?: string | PptxGenJSType.TextProps[];
-  /** Rich text runs passed as first argument to `slide.addText`. Same shape as PptxGenJS `TextProps[]`. */
+  /** Rich text runs passed to `slide.addText`. Same shape as PptxGenJS `TextProps[]`. */
   runs?: PptxGenJSType.TextProps[];
   /** Optional nested `<TextRun />` nodes or plain strings. */
   children?: PptxChildren;
-  /** Base options object merged with top-level option props. Top-level props win. */
+  /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.TextPropsOptions;
 };
 
+/** Props for `<Notes>` — speaker notes for a slide.
+ * Maps to `slide.addNotes()`.
+ */
 export type NotesProps = {
-  /** Speaker notes string. Children strings are joined when `text` is omitted. */
+  /** Speaker notes text. Falls back to children strings. */
   text?: string;
   children?: PptxChildren;
 };
 
 // ── Shapes ────────────────────────────────────────────────────────
 
+/** Generic shape props for `<Shape>`. Use this for any PptxGenJS shape
+ * that does not have a dedicated component (e.g. `<Rect />`, `<Ellipse />`).
+ * Maps to `slide.addShape(shape, options)`.
+ */
 export type ShapeProps = Omit<PptxGenJSType.ShapeProps, "children"> & {
-  /** Shape type passed as first argument to `slide.addShape`. Example: `rect`, `ellipse`, `roundRect`, `line`. */
+  /** Shape type passed as first argument to `slide.addShape()`. e.g. `"rect"`, `"ellipse"`, `"roundRect"`, `"line"`. */
   shape: PptxGenJSType.SHAPE_NAME;
-  /** Base options object merged with top-level option props. Top-level props win. */
+  /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.ShapeProps;
 };
 
+/** Props for `<Line>` — a simple line shape.
+ * Maps to `slide.addShape("line", options)`. For lines defined by two
+ * endpoints, use `<LineBetween>` instead.
+ */
 export type LineProps = Omit<ShapeProps, "shape">;
 
+/** Props for `<LineBetween>` — a line connecting two absolute coordinates.
+ * Pass start/end points via `x1`/`y1`/`x2`/`y2`.
+ */
 export type LineBetweenProps = Omit<LineProps, "x" | "y" | "w" | "h" | "flipH" | "flipV"> & {
   /** Start x coordinate in PPT inches. */
   x1: number;
@@ -120,37 +164,61 @@ export type LineBetweenProps = Omit<LineProps, "x" | "y" | "w" | "h" | "flipH" |
   y2: number;
 };
 
+/** Shared shape-options base for all named shape components. */
 export type ShapeOptionsProps = Omit<PptxGenJSType.ShapeProps, "children"> & {
-  /** Base options object merged with top-level option props. Top-level props win. */
+  /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.ShapeProps;
 };
 
+/** Props for `<Rect>`. Maps to `slide.addShape("rect", options)`. */
 export type RectProps = ShapeOptionsProps;
+/** Props for `<Ellipse>` / `<Oval>`. Maps to `slide.addShape("ellipse", options)`. */
 export type EllipseProps = ShapeOptionsProps;
+/** Props for `<Triangle>`. Maps to `slide.addShape("triangle", options)`. */
 export type TriangleProps = ShapeOptionsProps;
+/** Props for `<Diamond>`. Maps to `slide.addShape("diamond", options)`. */
 export type DiamondProps = ShapeOptionsProps;
+/** Props for `<Pentagon>`. Maps to `slide.addShape("pentagon", options)`. */
 export type PentagonProps = ShapeOptionsProps;
+/** Props for `<Hexagon>`. Maps to `slide.addShape("hexagon", options)`. */
 export type HexagonProps = ShapeOptionsProps;
+/** Props for star shapes (`<Star>`, `<Star4>`–`<Star10>`). Maps to `slide.addShape("star*", options)`. */
 export type StarProps = ShapeOptionsProps;
+/** Props for arrow shapes (`<LeftArrow>`, `<RightArrow>`, etc.). Maps to `slide.addShape("*Arrow", options)`. */
 export type ArrowProps = ShapeOptionsProps;
 
+/** Props for `<RoundRect>`. Maps to `slide.addShape("roundRect", options)`.
+ * @property rectRadius — corner radius; valid only for `roundRect`, range 0.0 (square) to 1.0 (fully rounded).
+ */
 export type RoundRectProps = ShapeOptionsProps & {
   /** Rounded rectangle radius. Valid only for `roundRect`; range 0.0 to 1.0. */
   rectRadius?: number;
 };
 
+/** Props for `<Arc>`. Maps to `slide.addShape("arc", options)`.
+ * @property angleRange — start and sweep angles in degrees [start, sweep]; valid for `arc`, `pie`, `blockArc`.
+ */
 export type ArcProps = ShapeOptionsProps & {
   /** Arc angle range. Valid for `arc`, `pie`, and `blockArc`; range [0-359, 0-359]. */
   angleRange?: [number, number];
 };
 
+/** Props for `<BlockArc>`. Maps to `slide.addShape("blockArc", options)`.
+ * Extends `<Arc>` with a thickness ratio.
+ */
 export type BlockArcProps = ArcProps & {
   /** Block arc thickness ratio. Valid only for `blockArc`; range 0.0 to 1.0. */
   arcThicknessRatio?: number;
 };
 
+/** Props for `<PieShape>` (visual pie-slice shape, NOT a data chart).
+ * Maps to `slide.addShape("pie", options)`.
+ */
 export type PieShapeProps = ArcProps;
 
+/** A single point or segment in a custom geometry path.
+ * Supports move-to, line-to, close, and three curve types (arc, cubic, quadratic).
+ */
 export type CustomGeometryPoint =
   | { x: PptxGenJSType.Coord; y: PptxGenJSType.Coord; moveTo?: boolean }
   | {
@@ -182,92 +250,138 @@ export type CustomGeometryPoint =
     }
   | { close: true };
 
+/** Props for `<CustomGeometry>`. Maps to `slide.addShape("custGeom", options)`.
+ * Convert SVG path commands to points:
+ * | SVG | CustomGeometryPoint |
+ * |-----|---------------------|
+ * | `M x y` | `{ x, y, moveTo:true }` |
+ * | `L x y` | `{ x, y }` |
+ * | `C x1 y1, x2 y2, x y` | cubic curve entry |
+ * | `Q x1 y1, x y` | quadratic curve entry |
+ * | `A ...` | arc curve entry |
+ * | `Z` / `z` | `{ close:true }` |
+ */
 export type CustomGeometryProps = ShapeOptionsProps & {
-  /**
-   * Custom geometry path points passed to PptxGenJS `custGeom`.
-   * Convert SVG path commands before passing them here:
-   * `M` -> `{ x, y, moveTo:true }`, `L` -> `{ x, y }`, `C` -> cubic curve,
-   * `Q` -> quadratic curve, `Z` -> `{ close:true }`.
-   */
+  /** Custom geometry path points passed to PptxGenJS `custGeom`. */
   points: CustomGeometryPoint[];
 };
 
 // ── Media ─────────────────────────────────────────────────────────
 
+/** Props for `<Image>`. Maps to `slide.addImage(options)`.
+ * Accepts a file path, data URI, or base64 string via the `path` prop.
+ */
 export type ImageProps = PptxGenJSType.ImageProps & {
-  /** Base options object merged with top-level option props. Top-level props win. */
+  /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.ImageProps;
 };
 
+/** Props for `<Media>` — audio, video, or online media.
+ * Maps to `slide.addMedia(options)`.
+ */
 export type MediaProps = PptxGenJSType.MediaProps & {
-  /** Base options object merged with top-level option props. Top-level props win. */
+  /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.MediaProps;
 };
 
 // ── Charts ────────────────────────────────────────────────────────
 
+/** Props for `<Chart>` — generic chart with explicit `type` + `data`.
+ * Maps to `slide.addChart(type, data, options)`.
+ * Use typed chart components (`<BarChart />`, `<LineChart />`, etc.)
+ * for a more concise syntax.
+ */
 export type ChartProps = Omit<PptxGenJSType.IChartOpts, "children"> & {
   /** Chart type or multi-chart descriptor. */
   type: PptxGenJSType.CHART_NAME | PptxGenJSType.IChartMulti[];
   /** Chart series data. */
   data: PptxGenJSType.OptsChartData[];
-  /** Base chart options merged with top-level option props. Top-level props win. */
+  /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.IChartOpts;
 };
 
+/** Props shared by typed chart components. */
 export type TypedChartProps = Omit<ChartProps, "type">;
 
+/** Props for `<AreaChart>`. Maps to `slide.addChart("area", data, options)`. */
 export type AreaChartProps = TypedChartProps;
+/** Props for `<BarChart>`. Maps to `slide.addChart("bar", data, options)`. */
 export type BarChartProps = TypedChartProps;
+/** Props for `<Bar3DChart>`. Maps to `slide.addChart("bar3D", data, options)`. */
 export type Bar3DChartProps = TypedChartProps;
+/** Props for `<BubbleChart>`. Maps to `slide.addChart("bubble", data, options)`. */
 export type BubbleChartProps = TypedChartProps;
+/** Props for `<DoughnutChart>`. Maps to `slide.addChart("doughnut", data, options)`. */
 export type DoughnutChartProps = TypedChartProps;
+/** Props for `<LineChart>`. Maps to `slide.addChart("line", data, options)`. */
 export type LineChartProps = TypedChartProps;
+/** Props for `<PieChart>`. Maps to `slide.addChart("pie", data, options)`. */
 export type PieChartProps = TypedChartProps;
+/** Props for `<RadarChart>`. Maps to `slide.addChart("radar", data, options)`. */
 export type RadarChartProps = TypedChartProps;
+/** Props for `<ScatterChart>`. Maps to `slide.addChart("scatter", data, options)`. */
 export type ScatterChartProps = TypedChartProps;
 
 // ── Table ─────────────────────────────────────────────────────────
 
+/** Props for `<TableCell>` — a single cell in a table row.
+ * Maps to an entry in the `PptxGenJS.TableCell[]` array.
+ */
 export type TableCellProps = PptxGenJSType.TableCellProps & {
-  /** Cell text. Children strings are joined when `text` is omitted. */
+  /** Cell text. Falls back to children strings. */
   text?: string | PptxGenJSType.TableCell[];
   children?: PptxChildren;
-  /** Base options object merged with top-level option props. Top-level props win. */
+  /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.TableCellProps;
 };
 
+/** Props for `<TableRow>` — a single row in a table.
+ * Maps to `PptxGenJS.TableRow`.
+ */
 export type TableRowProps = {
-  /** Optional direct row data. When omitted, nested `<TableCell />` nodes are collected. */
+  /** Row data. Falls back to child `<TableCell />` nodes. */
   cells?: PptxGenJSType.TableRow;
   children?: PptxChildren;
 };
 
+/** Props for `<Table>`. Maps to `slide.addTable(rows, options)`.
+ * Rows can be provided via the `rows` prop or as child `<TableRow />` nodes.
+ */
 export type TableProps = Omit<PptxGenJSType.TableProps, "children"> & {
   /** Table rows passed as first argument to `slide.addTable`. */
   rows?: PptxGenJSType.TableRow[];
   children?: PptxChildren;
-  /** Base options object merged with top-level option props. Top-level props win. */
+  /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.TableProps;
 };
 
+/** Props for `<TableToSlides>` — split an HTML table across multiple slides.
+ * Maps to `pptx.tableToSlides(eleId, options)` (browser / runtime DOM only).
+ */
 export type TableToSlidesProps = PptxGenJSType.TableToSlidesProps & {
   /** HTML table element id passed to `pptx.tableToSlides`. */
   eleId: string;
-  /** Base options object merged with top-level option props. Top-level props win. */
+  /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.TableToSlidesProps;
 };
 
 // ── Escape hatch ──────────────────────────────────────────────────
 
+/** Props for `<Raw>` — escape hatch for unsupported or newly added PptxGenJS APIs.
+ * Provides direct access to the `pptx` instance and the current `slide`.
+ */
 export type RawProps = {
-  /** Escape hatch for unsupported or newly added PptxGenJS APIs. */
+  /** Custom render callback invoked during rendering. Supports sync or async. */
   render: (context: RenderContext) => void | Promise<void>;
 };
 
+/** Context passed to the `<Raw>` render callback. */
 export type RenderContext = {
+  /** The root PptxGenJS instance. */
   pptx: PptxGenJSType;
+  /** The current slide being rendered (undefined during presentation-level rendering). */
   slide?: PptxGenJSType.PresSlide;
+  /** The raw node being rendered. */
   node: PptxNode<"Raw">;
 };
 
@@ -277,181 +391,244 @@ export type RenderContext = {
 
 // ── Generic factory helpers ───────────────────────────────────────
 
+/** Create a generic component factory for the given node type tag. */
 function component<T extends string>(type: T): ComponentFactory {
   return (props) => createNode(type, props as any);
 }
 
+/** Create a component factory for a specific PptxGenJS shape (e.g. `"rect"`, `"ellipse"`). */
 function shapeComponent<T extends string>(type: T, shape: string): ComponentFactory {
   return (props) => createNode(type, { ...props, shape } as any);
 }
 
+/** Create a component factory for a specific chart type (e.g. `"bar"`, `"line"`). */
 function chartComponent<T extends string>(type: T, chartType: string): ComponentFactory {
   return (props) => createNode(type, { ...props, type: chartType } as any);
 }
 
 // ── Deck / Presentation ──────────────────────────────────────────
 
-/** Root presentation. Maps to `new PptxGenJS()`. */
+/** Root presentation wrapper. Maps to `new PptxGenJS()`.
+ *
+ * Usage:
+ * ```tsx
+ * <Deck title="My Deck">
+ *   <Slide>...</Slide>
+ * </Deck>
+ * ```
+ */
 export const Deck = component("Deck") as ComponentFactory<DeckProps>;
-/** Alias for Deck. */
+/** Alias for `<Deck />`. */
 export const Presentation = Deck as ComponentFactory<DeckProps>;
 
 // ── Slide ─────────────────────────────────────────────────────────
 
-/** Create a slide. Maps to `pptx.addSlide`. */
+/** A single slide in the presentation. Maps to `pptx.addSlide()`.
+ *
+ * Usage:
+ * ```tsx
+ * <Slide layout="TITLE_ONLY">
+ *   <Text>Hello</Text>
+ * </Slide>
+ * ```
+ */
 export const Slide = component("Slide") as ComponentFactory<SlideProps>;
 
 // ── Layout / Section / Master / Placeholder ───────────────────────
 
-/** Define an additional custom layout. Maps to `pptx.defineLayout`. */
+/** Define an additional custom slide layout. Maps to `pptx.defineLayout()`.
+ * Provide the layout object via props (name, width, height).
+ */
 export const Layout = component("Layout") as ComponentFactory<LayoutProps>;
-/** Group nested slides into a PowerPoint section. Maps to `pptx.addSection`. */
+/** Group one or more slides into a named PowerPoint section.
+ * Maps to `pptx.addSection()`.
+ *
+ * Usage:
+ * ```tsx
+ * <Section name="Overview">
+ *   <Slide>...</Slide>
+ * </Section>
+ * ```
+ */
 export const Section = component("Section") as ComponentFactory<SectionProps>;
-/** Define a reusable slide master. Maps to `pptx.defineSlideMaster`. */
+/** Define a reusable slide master. Maps to `pptx.defineSlideMaster()`.
+ * Supports placeholders via nested `<Placeholder />` nodes.
+ */
 export const Master = component("Master") as ComponentFactory<MasterProps>;
-/** Add a placeholder inside Master. Maps to `SlideMasterProps.objects[].placeholder`. */
+/** Declare a placeholder inside a slide master.
+ * Maps to `SlideMasterProps.objects[].placeholder` entries.
+ */
 export const Placeholder = component("Placeholder") as ComponentFactory<PlaceholderProps>;
 
 // ── Text ──────────────────────────────────────────────────────────
 
-/** Text box, rich text container, or text inside a shape. Maps to `slide.addText`. */
+/** Text box or rich text block. Maps to `slide.addText(text, options)`.
+ *
+ * Usage:
+ * ```tsx
+ * <Text x={1} y={1} w={4} fontSize={24}>Hello World</Text>
+ * <Text x={1} y={2} w={4}>
+ *   <TextRun bold fontSize={24}>Bold</TextRun>
+ *   <TextRun color="888">Regular</TextRun>
+ * </Text>
+ * ```
+ *
+ * Text content can come from the `text` prop, child `<TextRun />` nodes,
+ * plain-string children, or the `runs` prop. */
 export const Text = component("Text") as ComponentFactory<TextProps>;
-/** Per-run formatting inside Text. Maps to `PptxGenJS.TextProps[]` item. */
+/** A single formatted text run inside `<Text />`. Maps to `PptxGenJS.TextProps`.
+ * Supports per-run font, color, bold, italic, etc.
+ */
 export const TextRun = component("TextRun") as ComponentFactory<TextRunProps>;
-/** Speaker notes. Maps to `slide.addNotes`. */
+/** Speaker notes for a slide. Maps to `slide.addNotes()`.
+ *
+ * Usage:
+ * ```tsx
+ * <Slide>
+ *   <Notes>Remember to mention the quarterly results.</Notes>
+ * </Slide>
+ * ```
+ */
 export const Notes = component("Notes") as ComponentFactory<NotesProps>;
 
 // ── Shapes ────────────────────────────────────────────────────────
 
-/** Any PptxGenJS shape not exposed as a dedicated component. Maps to `slide.addShape(shape, options)`. */
+/** Generic shape — for any PptxGenJS shape without a dedicated component.
+ * Maps to `slide.addShape(shape, options)`. */
 export const Shape = component("Shape") as ComponentFactory<ShapeProps>;
 
-/** Pure rectangle. Maps to `slide.addShape('rect')`. */
+/** Rectangle. Maps to `slide.addShape("rect", options)`. */
 export const Rect = shapeComponent("Rect", "rect") as ComponentFactory<RectProps>;
-/** Rounded rectangle; supports rectRadius. Maps to `slide.addShape('roundRect')`. */
+/** Rounded rectangle; supports `rectRadius` for corner rounding.
+ * Maps to `slide.addShape("roundRect", options)`. */
 export const RoundRect = shapeComponent(
   "RoundRect",
   "roundRect",
 ) as ComponentFactory<RoundRectProps>;
-/** Ellipse or oval. Maps to `slide.addShape('ellipse')`. */
+/** Ellipse / oval. Maps to `slide.addShape("ellipse", options)`. */
 export const Ellipse = shapeComponent("Ellipse", "ellipse") as ComponentFactory<EllipseProps>;
-/** Alias for Ellipse. */
+/** Alias for `<Ellipse />`. */
 export const Oval = Ellipse;
-/** Triangle shape. Maps to `slide.addShape('triangle')`. */
+/** Triangle. Maps to `slide.addShape("triangle", options)`. */
 export const Triangle = shapeComponent("Triangle", "triangle") as ComponentFactory<TriangleProps>;
-/** Right triangle shape. Maps to `slide.addShape('rtTriangle')`. */
+/** Right-angle triangle. Maps to `slide.addShape("rtTriangle", options)`. */
 export const RightTriangle = shapeComponent(
   "RightTriangle",
   "rtTriangle",
 ) as ComponentFactory<TriangleProps>;
-/** Diamond shape. Maps to `slide.addShape('diamond')`. */
+/** Diamond. Maps to `slide.addShape("diamond", options)`. */
 export const Diamond = shapeComponent("Diamond", "diamond") as ComponentFactory<DiamondProps>;
-/** Pentagon shape. Maps to `slide.addShape('pentagon')`. */
+/** Pentagon. Maps to `slide.addShape("pentagon", options)`. */
 export const Pentagon = shapeComponent(
   "Pentagon",
   "pentagon",
 ) as ComponentFactory<ShapeOptionsProps>;
-/** Hexagon shape. Maps to `slide.addShape('hexagon')`. */
+/** Hexagon. Maps to `slide.addShape("hexagon", options)`. */
 export const Hexagon = shapeComponent("Hexagon", "hexagon") as ComponentFactory<HexagonProps>;
-/** Five-point star shape. Maps to `slide.addShape('star5')`. */
+/** Five-point star. Maps to `slide.addShape("star5", options)`. */
 export const Star = shapeComponent("Star", "star5") as ComponentFactory<StarProps>;
-/** Four-point star shape. Maps to `slide.addShape('star4')`. */
+/** Four-point star. Maps to `slide.addShape("star4", options)`. */
 export const Star4 = shapeComponent("Star4", "star4") as ComponentFactory<StarProps>;
-/** Alias for Star (five-point). */
+/** Alias for `<Star />` (five-point). */
 export const Star5 = Star;
-/** Six-point star shape. Maps to `slide.addShape('star6')`. */
+/** Six-point star. Maps to `slide.addShape("star6", options)`. */
 export const Star6 = shapeComponent("Star6", "star6") as ComponentFactory<StarProps>;
-/** Eight-point star shape. Maps to `slide.addShape('star8')`. */
+/** Eight-point star. Maps to `slide.addShape("star8", options)`. */
 export const Star8 = shapeComponent("Star8", "star8") as ComponentFactory<StarProps>;
-/** Ten-point star shape. Maps to `slide.addShape('star10')`. */
+/** Ten-point star. Maps to `slide.addShape("star10", options)`. */
 export const Star10 = shapeComponent("Star10", "star10") as ComponentFactory<StarProps>;
-/** Line or arrow line. Maps to `slide.addShape('line')`. */
+/** Simple line. Maps to `slide.addShape("line", options)`.
+ * For lines defined by start/end points, use `<LineBetween />` instead. */
 export const Line = component("Line") as ComponentFactory<LineProps>;
-/** Line between two endpoints. Maps to `slide.addShape('line')` with normalized x/y/w/h and flipH/flipV. */
+/** Line connecting two absolute coordinates.
+ * Pass start/end points via `x1`/`y1`/`x2`/`y2`. */
 export const LineBetween = component("LineBetween") as ComponentFactory<LineBetweenProps>;
-/** Arc shape; supports angleRange. Maps to `slide.addShape('arc')`. */
+/** Arc shape; supports `angleRange`. Maps to `slide.addShape("arc", options)`. */
 export const Arc = shapeComponent("Arc", "arc") as ComponentFactory<ArcProps>;
-/** Thick arc; supports angleRange and arcThicknessRatio. Maps to `slide.addShape('blockArc')`. */
+/** Thick arc; supports `angleRange` and `arcThicknessRatio`.
+ * Maps to `slide.addShape("blockArc", options)`. */
 export const BlockArc = shapeComponent("BlockArc", "blockArc") as ComponentFactory<BlockArcProps>;
-/** Pie-slice shape; not a data chart. Maps to `slide.addShape('pie')`. */
+/** Pie-slice shape (visual only — not a data chart).
+ * Maps to `slide.addShape("pie", options)`. */
 export const PieShape = shapeComponent("PieShape", "pie") as ComponentFactory<PieShapeProps>;
-/** Editable custom path geometry. Maps to `slide.addShape('custGeom')`. */
+/** Editable custom path geometry. Maps to `slide.addShape("custGeom", options)`. */
 export const CustomGeometry = shapeComponent(
   "CustomGeometry",
   "custGeom",
 ) as ComponentFactory<CustomGeometryProps>;
-/** Left-pointing arrow. Maps to `slide.addShape('leftArrow')`. */
+/** Left-pointing arrow. Maps to `slide.addShape("leftArrow", options)`. */
 export const LeftArrow = shapeComponent("LeftArrow", "leftArrow") as ComponentFactory<ArrowProps>;
-/** Right-pointing arrow. Maps to `slide.addShape('rightArrow')`. */
+/** Right-pointing arrow. Maps to `slide.addShape("rightArrow", options)`. */
 export const RightArrow = shapeComponent(
   "RightArrow",
   "rightArrow",
 ) as ComponentFactory<ArrowProps>;
-/** Up-pointing arrow. Maps to `slide.addShape('upArrow')`. */
+/** Up-pointing arrow. Maps to `slide.addShape("upArrow", options)`. */
 export const UpArrow = shapeComponent("UpArrow", "upArrow") as ComponentFactory<ArrowProps>;
-/** Down-pointing arrow. Maps to `slide.addShape('downArrow')`. */
+/** Down-pointing arrow. Maps to `slide.addShape("downArrow", options)`. */
 export const DownArrow = shapeComponent("DownArrow", "downArrow") as ComponentFactory<ArrowProps>;
-/** Left-right bidirectional arrow. Maps to `slide.addShape('leftRightArrow')`. */
+/** Left-right bidirectional arrow. Maps to `slide.addShape("leftRightArrow", options)`. */
 export const LeftRightArrow = shapeComponent(
   "LeftRightArrow",
   "leftRightArrow",
 ) as ComponentFactory<ArrowProps>;
-/** Up-down bidirectional arrow. Maps to `slide.addShape('upDownArrow')`. */
+/** Up-down bidirectional arrow. Maps to `slide.addShape("upDownArrow", options)`. */
 export const UpDownArrow = shapeComponent(
   "UpDownArrow",
   "upDownArrow",
 ) as ComponentFactory<ArrowProps>;
-/** Chevron / angle bracket shape. Maps to `slide.addShape('chevron')`. */
+/** Chevron / angle bracket. Maps to `slide.addShape("chevron", options)`. */
 export const Chevron = shapeComponent("Chevron", "chevron") as ComponentFactory<ArrowProps>;
-/** Cloud shape. Maps to `slide.addShape('cloud')`. */
+/** Cloud shape. Maps to `slide.addShape("cloud", options)`. */
 export const Cloud = shapeComponent("Cloud", "cloud") as ComponentFactory<ShapeOptionsProps>;
-/** Heart shape. Maps to `slide.addShape('heart')`. */
+/** Heart shape. Maps to `slide.addShape("heart", options)`. */
 export const Heart = shapeComponent("Heart", "heart") as ComponentFactory<ShapeOptionsProps>;
-/** Donut / ring shape. Maps to `slide.addShape('donut')`. */
+/** Donut / ring shape. Maps to `slide.addShape("donut", options)`. */
 export const Donut = shapeComponent("Donut", "donut") as ComponentFactory<ShapeOptionsProps>;
-/** Plus / cross shape. Maps to `slide.addShape('plus')`. */
+/** Plus / cross shape. Maps to `slide.addShape("plus", options)`. */
 export const Plus = shapeComponent("Plus", "plus") as ComponentFactory<ShapeOptionsProps>;
 
 // ── Media ─────────────────────────────────────────────────────────
 
-/** Image by path or data URI/base64. Maps to `slide.addImage`. */
+/** Image (path, data URI, or base64). Maps to `slide.addImage(options)`. */
 export const Image = component("Image") as ComponentFactory<ImageProps>;
-/** Audio, video, or online media. Maps to `slide.addMedia`. */
+/** Audio, video, or online media. Maps to `slide.addMedia(options)`. */
 export const Media = component("Media") as ComponentFactory<MediaProps>;
 
 // ── Charts ────────────────────────────────────────────────────────
 
-/** Multi-chart or any raw chart type usage. Maps to `slide.addChart(type, data, options)`. */
+/** Generic chart with explicit type + data. Maps to `slide.addChart(type, data, options)`.
+ * For common chart types, prefer typed components (`<BarChart />`, `<LineChart />`, etc.). */
 export const Chart = component("Chart") as ComponentFactory<ChartProps>;
-/** Area chart. Maps to `slide.addChart('area')`. */
+/** Area chart. Maps to `slide.addChart("area", data, options)`. */
 export const AreaChart = chartComponent("AreaChart", "area") as ComponentFactory<AreaChartProps>;
-/** Bar chart. Maps to `slide.addChart('bar')`. */
+/** Bar chart. Maps to `slide.addChart("bar", data, options)`. */
 export const BarChart = chartComponent("BarChart", "bar") as ComponentFactory<BarChartProps>;
-/** 3D bar chart. Maps to `slide.addChart('bar3D')`. */
+/** 3D bar chart. Maps to `slide.addChart("bar3D", data, options)`. */
 export const Bar3DChart = chartComponent(
   "Bar3DChart",
   "bar3D",
 ) as ComponentFactory<Bar3DChartProps>;
-/** Bubble chart. Maps to `slide.addChart('bubble')`. */
+/** Bubble chart. Maps to `slide.addChart("bubble", data, options)`. */
 export const BubbleChart = chartComponent(
   "BubbleChart",
   "bubble",
 ) as ComponentFactory<BubbleChartProps>;
-/** Doughnut chart. Maps to `slide.addChart('doughnut')`. */
+/** Doughnut chart. Maps to `slide.addChart("doughnut", data, options)`. */
 export const DoughnutChart = chartComponent(
   "DoughnutChart",
   "doughnut",
 ) as ComponentFactory<DoughnutChartProps>;
-/** Line chart. Maps to `slide.addChart('line')`. */
+/** Line chart. Maps to `slide.addChart("line", data, options)`. */
 export const LineChart = chartComponent("LineChart", "line") as ComponentFactory<LineChartProps>;
-/** Pie chart. Maps to `slide.addChart('pie')`. */
+/** Pie chart. Maps to `slide.addChart("pie", data, options)`. */
 export const PieChart = chartComponent("PieChart", "pie") as ComponentFactory<PieChartProps>;
-/** Radar chart. Maps to `slide.addChart('radar')`. */
+/** Radar chart. Maps to `slide.addChart("radar", data, options)`. */
 export const RadarChart = chartComponent(
   "RadarChart",
   "radar",
 ) as ComponentFactory<RadarChartProps>;
-/** Scatter chart. Maps to `slide.addChart('scatter')`. */
+/** Scatter chart. Maps to `slide.addChart("scatter", data, options)`. */
 export const ScatterChart = chartComponent(
   "ScatterChart",
   "scatter",
@@ -459,91 +636,19 @@ export const ScatterChart = chartComponent(
 
 // ── Table ─────────────────────────────────────────────────────────
 
-/** PowerPoint table. Maps to `slide.addTable`. */
+/** Table of rows and cells. Maps to `slide.addTable(rows, options)`. */
 export const Table = component("Table") as ComponentFactory<TableProps>;
-/** Declarative row inside Table. Maps to `PptxGenJS.TableRow`. */
+/** A row inside `<Table />`. Maps to `PptxGenJS.TableRow`. */
 export const TableRow = component("TableRow") as ComponentFactory<TableRowProps>;
-/** Declarative cell inside TableRow. Maps to `PptxGenJS.TableCell`. */
+/** A cell inside `<TableRow />`. Maps to `PptxGenJS.TableCell`. */
 export const TableCell = component("TableCell") as ComponentFactory<TableCellProps>;
-/** Convert an HTML table in browser/runtime DOM. Maps to `pptx.tableToSlides`. */
+/** Split an HTML table across multiple slides (browser runtime only).
+ * Maps to `pptx.tableToSlides(eleId, options)`. */
 export const TableToSlides = component("TableToSlides") as ComponentFactory<TableToSlidesProps>;
 
 // ── Escape hatch ──────────────────────────────────────────────────
 
-/** Newest or unsupported PptxGenJS APIs. Maps to custom render callback. */
+/** Escape hatch for unsupported or new PptxGenJS APIs.
+ * Provides direct access via a custom render callback.
+ * Maps to the `<Raw>` custom render protocol. */
 export const Raw = component("Raw") as ComponentFactory<RawProps>;
-
-// ════════════════════════════════════════════════════════════════════
-// DEFAULT EXPORT — all component factories as a single object
-// ════════════════════════════════════════════════════════════════════
-
-/** All component factories as a single object. Import as default:
- * ```ts
- * import P from "@zythum02/pptxgenjsx";
- * P.Deck, P.Slide, P.Rect, ...
- * ```
- */
-const _default = {
-  Deck,
-  Presentation,
-  Slide,
-  Layout,
-  Section,
-  Master,
-  Placeholder,
-  Text,
-  TextRun,
-  Notes,
-  Shape,
-  Rect,
-  RoundRect,
-  Ellipse,
-  Oval,
-  Triangle,
-  RightTriangle,
-  Diamond,
-  Pentagon,
-  Hexagon,
-  Star,
-  Star4,
-  Star5,
-  Star6,
-  Star8,
-  Star10,
-  Line,
-  LineBetween,
-  Arc,
-  BlockArc,
-  PieShape,
-  CustomGeometry,
-  LeftArrow,
-  RightArrow,
-  UpArrow,
-  DownArrow,
-  LeftRightArrow,
-  UpDownArrow,
-  Chevron,
-  Cloud,
-  Heart,
-  Donut,
-  Plus,
-  Image,
-  Media,
-  Chart,
-  AreaChart,
-  BarChart,
-  Bar3DChart,
-  BubbleChart,
-  DoughnutChart,
-  LineChart,
-  PieChart,
-  RadarChart,
-  ScatterChart,
-  Table,
-  TableRow,
-  TableCell,
-  TableToSlides,
-  Raw,
-};
-
-export default _default;
