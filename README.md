@@ -4,6 +4,9 @@ A JSX runtime for building PowerPoint presentations with [pptxgenjs](https://git
 
 > **Fork notice**: This package is based on the excellent work of [pptxgenjs-jsx](https://github.com/artifact-kit/pptxgenjs-jsx) by Artifact Kit. It extends the original runtime with additional features and adjustments.
 
+> 💡 **Recommended**: Quickly scaffold a new project with the official starter template
+> **[pptxgen-ts-starter](https://github.com/zythum/pptxgen-ts-starter)** — preconfigured with tsconfig, sample deck, and build script.
+
 ## Features
 
 - **JSX syntax** — Declare slides, text, shapes, and charts with familiar JSX
@@ -68,19 +71,6 @@ async function main() {
 }
 
 main();
-```
-
-## Starter Template
-
-Get started instantly with the official starter repo:
-
-👉 **[pptxgen-ts-starter](https://github.com/zythum/pptxgen-ts-starter)** — A minimal TypeScript template preconfigured with `@zythum02/pptxgenjsx`, including tsconfig, a sample deck, and a ready-to-run build script.
-
-```bash
-npx degit zythum/pptxgen-ts-starter my-presentation
-cd my-presentation
-npm install
-npm run build
 ```
 
 ## License
