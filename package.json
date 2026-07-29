@@ -2,19 +2,19 @@
   "name": "@zythum02/pptxgenjsx",
   "version": "0.1.0",
   "description": "JSX runtime for building PowerPoint presentations with pptxgenjs",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/zythum/pptxgenjsx.git"
-  },
   "homepage": "https://github.com/zythum/pptxgenjsx#readme",
   "bugs": {
     "url": "https://github.com/zythum/pptxgenjsx/issues"
   },
+  "license": "MIT",
   "author": {
     "name": "zythum",
     "email": "zythum02@gmail.com",
     "url": "https://github.com/zythum"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zythum/pptxgenjsx.git"
   },
   "files": [
     "dist"

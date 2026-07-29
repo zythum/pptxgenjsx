@@ -36,9 +36,7 @@ function TitleSlide() {
     <Slide>
       <Rect x={0} y={0} w={13.333} h={7.5} fill={{ color: "1E1E2E" }} />
       <Text x={1} y={3} w={11} h={1.5}>
-        <TextRun options={{ fontSize: 44, color: "FFFFFF", bold: true }}>
-          My Presentation
-        </TextRun>
+        <TextRun options={{ fontSize: 44, color: "FFFFFF", bold: true }}>My Presentation</TextRun>
       </Text>
     </Slide>
   );
@@ -65,7 +63,7 @@ async function main() {
       <TitleSlide />
       <DataSlide />
     </Deck>,
-    { fileName: "output/presentation.pptx" }
+    { fileName: "output/presentation.pptx" },
   );
 }
 
