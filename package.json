@@ -1,0 +1,41 @@
+{
+  "name": "@zythum02/pptxgenjsx",
+  "version": "0.1.0",
+  "description": "JSX runtime for building PowerPoint presentations with pptxgenjs",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/components.js",
+  "module": "./dist/components.js",
+  "types": "./dist/components.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/components.d.ts",
+      "default": "./dist/components.js"
+    },
+    "./jsx-runtime": {
+      "types": "./dist/jsx-runtime.d.ts",
+      "default": "./dist/jsx-runtime.js"
+    },
+    "./render": {
+      "types": "./dist/render.d.ts",
+      "default": "./dist/render.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint",
+    "format": "oxfmt"
+  },
+  "dependencies": {
+    "pptxgenjs": "^4.0.1"
+  },
+  "devDependencies": {
+    "oxfmt": "^0.59.0",
+    "oxlint": "^1.74.0",
+    "typescript": "^5.7.0"
+  }
+}
