@@ -13,6 +13,7 @@ import {
   type PptxElement,
   type PptxPresentation,
   type PptxSlide,
+  type PptxChild,
   isPptxNode,
   resolveChild,
 } from "./node.js";
@@ -30,6 +31,11 @@ import {
 // ════════════════════════════════════════════════════════════════════
 // RENDERING ENGINE
 // ════════════════════════════════════════════════════════════════════
+
+// ── EMU (English Metric Unit) ─────────────────────────────
+// OOXML uses EMU as its base unit. PptxGenJS stores presLayout
+// dimensions in EMU. 1 inch = 914400 EMU.
+const EMU_PER_INCH = 914400;
 
 // ── Reserved prop keys (not passed to pptxgenjs) ─────────────────
 
@@ -120,9 +126,10 @@ export async function createPptx(
   if (node.type === "Deck") {
     applyDeckProps(pptx, node.props as any);
 
-    const total = countDeckSlides(node);
-    const width = (pptx as any).width ?? 13.333;
-    const height = (pptx as any).height ?? 7.5;
+    const total = await countDeckSlides(node);
+
+    const width = pptx.presLayout.width / EMU_PER_INCH;
+    const height = pptx.presLayout.height / EMU_PER_INCH;
 
     const ctx: SlideRenderContext = {
       pptx,
@@ -139,8 +146,8 @@ export async function createPptx(
   }
 
   if (node.type === "Slide") {
-    const width = (pptx as any).width ?? 13.333;
-    const height = (pptx as any).height ?? 7.5;
+    const width = pptx.presLayout.width / EMU_PER_INCH;
+    const height = pptx.presLayout.height / EMU_PER_INCH;
 
     const ctx: SlideRenderContext = {
       pptx,
@@ -161,14 +168,31 @@ export async function createPptx(
 
 // ── Slide counting ────────────────────────────────────────────────
 
-/** Count all `<Slide>` nodes in the node tree recursively. */
-function countDeckSlides(node: PptxNode): number {
+/** Count all `<Slide>` nodes in the node tree recursively.
+ *
+ * Must resolve PptxNodePromise wrappers since all non-string component
+ * factories are deferred (lazy-evaluated during tree traversal).
+ * Structural factories (Slide, Fragment, etc.) do not need rendering
+ * context, so resolving them here is safe.
+ */
+async function countDeckSlides(node: PptxNode): Promise<number> {
   if (node.type === "Slide") return 1;
 
   let count = 0;
   for (const rawChild of node.children) {
-    if (!isPptxNode(rawChild)) continue;
-    count += countDeckSlides(rawChild);
+    if (isPptxNode(rawChild)) {
+      count += await countDeckSlides(rawChild);
+    }
+    // ── handle PptxNodePromise ────────────────────────────────────
+    // Since all non-string component factories now return PptxNodePromise
+    // (deferred execution), Slide/Fragment/Raw wrappers at the Deck level
+    // are PptxNodePromise instances and must be resolved to count slides.
+    else {
+      const child = await resolveChild(rawChild);
+      if (isPptxNode(child)) {
+        count += await countDeckSlides(child);
+      }
+    }
   }
   return count;
 }
@@ -338,14 +362,22 @@ async function processSlide(
     const module = await props.component();
     const LazyComponent = module.default;
 
-    // Wrap only the factory call in context — sync variable approach is safe
-    // because the factory's JSX-building phase executes synchronously.
-    const lazyNode = await withSlideContext(slideCtx, () => resolveChild(LazyComponent({})));
-    await renderSlideElement(lazyNode, { pptx: ctx.pptx, slide });
+    // IMPORTANT: Both the factory call AND rendering must happen inside
+    // withSlideContext so that useSlideContext() / useDeckContext() /
+    // useGroupContext() have access to the rendering context throughout
+    // the entire slide content evaluation and rendering pipeline.
+    await withSlideContext(slideCtx, async () => {
+      const lazyNode = await resolveChild(LazyComponent({}));
+      await renderSlideElement(lazyNode, { pptx: ctx.pptx, slide });
+    });
     return;
   }
 
   // ── Direct children ──
+  // All non-string component factories are now deferred via PptxNodePromise
+  // thunks.  resolveChild() calls the thunk synchronously, inside the
+  // withSlideContext scope, so useSlideContext() / useDeckContext() /
+  // useGroupContext() work correctly.
   await withSlideContext(slideCtx, async () => {
     for (const rawChild of node.children) {
       const child = await resolveChild(rawChild);
@@ -375,7 +407,7 @@ async function renderSlideElement(
 
   switch (node.type) {
     case "Text":
-      renderText(node, slide);
+      await renderText(node, slide);
       break;
     case "Line":
       renderLine(node, slide);
@@ -390,7 +422,7 @@ async function renderSlideElement(
       renderMedia(node, slide);
       break;
     case "Table":
-      renderTable(node, slide);
+      await renderTable(node, slide);
       break;
     case "Notes":
       slide.addNotes(getTextContent(node, (node.props as any).text));
@@ -484,9 +516,9 @@ function offsetXY<T extends Record<string, any>>(props: T): T {
 
 // ── Individual element renderers ──────────────────────────────────
 
-function renderText(node: PptxNode, slide: PptxSlide): void {
+async function renderText(node: PptxNode, slide: PptxSlide): Promise<void> {
   const props = offsetXY(node.props as any);
-  const textRuns = collectTextRuns(node) ?? props.text ?? getTextContent(node);
+  const textRuns = (await collectTextRuns(node)) ?? props.text ?? getTextContent(node);
   slide.addText(textRuns, mergeOptions(props.options, props));
 }
 
@@ -542,15 +574,23 @@ function renderChart(node: PptxNode, slide: PptxSlide): void {
   );
 }
 
-function renderTable(node: PptxNode, slide: PptxSlide): void {
+async function renderTable(node: PptxNode, slide: PptxSlide): Promise<void> {
   const props = offsetXY(node.props as any);
   const rows =
     props.rows ??
-    node.children
-      .filter(isPptxNode)
-      .filter((c) => c.type === "TableRow")
-      .map(extractTableRow);
+    await resolveTableRows(node);
   slide.addTable(deepClone(rows), mergeOptions(props.options, props));
+}
+
+async function resolveTableRows(node: PptxNode): Promise<any[]> {
+  const children = await resolveChildren(node);
+  const rows: any[] = [];
+  for (const child of children) {
+    if (isPptxNode(child) && child.type === "TableRow") {
+      rows.push(await extractTableRow(child));
+    }
+  }
+  return rows;
 }
 
 function processTableToSlides(node: PptxNode, ctx: { pptx: PptxPresentation }): void {
@@ -560,18 +600,21 @@ function processTableToSlides(node: PptxNode, ctx: { pptx: PptxPresentation }): 
 
 // ── Table helpers ─────────────────────────────────────────────────
 
-function extractTableRow(node: PptxNode): any[] {
+async function extractTableRow(node: PptxNode): Promise<any[]> {
   if (node.type !== "TableRow") {
     throw new Error(`Table children must be TableRow nodes. Got ${node.type}.`);
   }
   const props = node.props as any;
-  return (
-    props.cells ??
-    node.children
-      .filter(isPptxNode)
-      .filter((c) => c.type === "TableCell")
-      .map(extractTableCell)
-  );
+  if (props.cells) return props.cells;
+
+  const children = await resolveChildren(node);
+  const cells: any[] = [];
+  for (const child of children) {
+    if (isPptxNode(child) && child.type === "TableCell") {
+      cells.push(extractTableCell(child));
+    }
+  }
+  return cells;
 }
 
 function extractTableCell(node: PptxNode): any {
@@ -658,8 +701,30 @@ function extractMasterObject(node: PptxNode): Record<string, any> {
 
 // ── Text helpers ──────────────────────────────────────────────────
 
-function collectTextRuns(node: PptxNode): any[] | undefined {
-  const runs = node.children
+/**
+ * Resolve all PptxNodePromise children in a node's children array.
+ *
+ * With our deferred thunk approach, all non-string component factory calls
+ * return PptxNodePromise instances.  Node children arrays may contain a mix
+ * of resolved PptxNodes and unresolved PptxNodePromises.  This helper
+ * resolves all promises and returns a clean array of resolved PptxNodes
+ * (plus primitives).
+ *
+ * Must be called from an async function WITHIN a rendering context
+ * (slide / deck / group) so that thunk factories inherit the correct
+ * AsyncLocalStorage context.
+ */
+async function resolveChildren(node: PptxNode): Promise<readonly PptxChild[]> {
+  const resolved: PptxChild[] = [];
+  for (const rawChild of node.children) {
+    resolved.push(await resolveChild(rawChild));
+  }
+  return resolved;
+}
+
+async function collectTextRuns(node: PptxNode): Promise<any[] | undefined> {
+  const children = await resolveChildren(node);
+  const runs = children
     .filter(isPptxNode)
     .filter((c) => c.type === "TextRun")
     .map((c) => deepClone(c.props));
@@ -829,28 +894,41 @@ function getValidChildTypes(type: string): Set<string> | undefined {
 /**
  * Validate a Deck or Slide tree for common mistakes.
  * Returns a list of issues (errors and warnings).
+ *
+ * Accepts both resolved PptxNode and deferred PptxNodePromise (which is
+ * resolved first).  Only resolves **already-resolved** children during
+ * traversal — PptxNodePromise (deferred component thunks) are skipped
+ * because their factories may require rendering context (slide / deck /
+ * group) that is NOT available during validation.
+ *
+ * This means validation only checks the structural skeleton (Deck → Slide
+ * → intrinsic elements like Text, Rect, etc.) and skips any user-defined
+ * component boundaries until rendering.
  */
-export function validateDeck(root: PptxNode): ValidationIssue[] {
+export async function validateDeck(root: PptxElement): Promise<ValidationIssue[]> {
+  const node = await resolveChild(root);
   const issues: ValidationIssue[] = [];
 
-  if (root.type !== "Deck" && root.type !== "Slide") {
+  if (node.type !== "Deck" && node.type !== "Slide") {
     issues.push({
       code: "root.invalid",
       level: "error",
-      path: root.type,
-      message: `Root must be Deck or Slide, got ${root.type}.`,
+      path: node.type,
+      message: `Root must be Deck or Slide, got ${node.type}.`,
     });
   }
 
-  walk(root, root.type);
+  await walk(node, node.type);
   return issues;
 
-  function walk(node: PptxNode, path: string): void {
+  async function walk(node: PptxNode, path: string): Promise<void> {
     validateNodeProps(node, path, issues);
-    for (const child of node.children) {
-      if (!isPptxNode(child)) continue;
-      validateChildType(node, child, `${path}/${child.type}`, issues);
-      walk(child, `${path}/${child.type}`);
+    for (const rawChild of node.children) {
+      // Skip PptxNodePromise — component factories may need rendering
+      // context that is not available during validation.
+      if (!isPptxNode(rawChild)) continue;
+      validateChildType(node, rawChild, `${path}/${rawChild.type}`, issues);
+      await walk(rawChild, `${path}/${rawChild.type}`);
     }
   }
 }

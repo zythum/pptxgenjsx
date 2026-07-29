@@ -41,17 +41,35 @@ export function jsx<P extends ComponentProps>(
     } as any);
   }
 
-  const result = Component({
-    ...rest,
-    children: flatChildren,
-  } as P & { children?: PptxChildren });
-
-  // Wrap async component results
-  if (result instanceof Promise) {
-    return createPptxNodePromise(result);
-  }
-
-  return result;
+  // ── Deferred execution via synchronous thunk ──────────────────────────
+  //
+  // Defer ALL non-string component factory calls so they execute during
+  // tree traversal (in render.ts) rather than during JSX construction.
+  //
+  // Why?  Components like <Slide><Title /></Slide> evaluate children first
+  // (jsx(Title, {}) runs before jsx(Slide, ...)).  If Title's factory calls
+  // useSlideContext(), useDeckContext(), or useGroupContext(), those contexts
+  // DON'T exist yet during JSX construction — they are set up in render.ts
+  // inside withSlideContext() / withDeckContext() / withGroupContext().
+  //
+  // By wrapping every factory call in a PptxNodePromise **thunk** (a zero-arg
+  // function), the factory is executed lazily when resolveChild() processes
+  // the promise.  The thunk is called **synchronously** from resolveChild(),
+  // so the factory inherits whatever rendering context (slide / deck / group)
+  // is active at the call site.
+  //
+  // This is critical: using Promise.resolve().then() would break
+  // AsyncLocalStorage propagation because the promise chain is created
+  // during JSX construction (outside any rendering context).  The thunk
+  // approach keeps the factory call synchronous from the perspective of
+  // the rendering engine's event loop.
+  // ───────────────────────────────────────────────────────────────────────
+  return createPptxNodePromise(() =>
+    Component({
+      ...rest,
+      children: flatChildren,
+    } as P & { children?: PptxChildren }),
+  );
 }
 
 /** Alias for jsx (used when there are multiple children). */

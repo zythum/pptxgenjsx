@@ -12,29 +12,77 @@ export type PrimitiveChild = string | number | boolean | null | undefined;
 
 export type ComponentProps = object;
 
-// ── PptxNodePromise — wrapper for async component results ─────────
+// ── PptxNodePromise — deferred component factory wrapper ──────────
 
+/**
+ * A deferred component factory wrapper.
+ *
+ * Unlike the original design (which stored a pre-resolved Promise), this
+ * stores a **thunk** — a zero-argument factory function.  The thunk is
+ * called **synchronously** when `resolveChild()` processes the promise,
+ * which means the factory executes inside whatever rendering context
+ * (slide / deck / group) is active at that point.
+ *
+ * This is critical for `AsyncLocalStorage`-based contexts
+ * (`useSlideContext`, `useDeckContext`, `useGroupContext`): if the
+ * factory were scheduled via `Promise.resolve().then()`, the promise
+ * chain would be created outside the rendering context (during JSX
+ * construction), and `AsyncLocalStorage` context would NOT propagate
+ * into the `.then()` callback.  By calling the thunk synchronously
+ * from `resolveChild()`, the factory inherits the caller's rendering
+ * context naturally.
+ */
 export interface PptxNodePromise {
-  readonly $$pptxPromise: true;
-  readonly promise: Promise<PptxNode>;
+  readonly $pptxPromise: true;
+  /** Factory thunk — called synchronously by resolveChild(). */
+  readonly thunk: () => PptxNode | Promise<PptxNode>;
 }
 
-export function createPptxNodePromise(promise: Promise<PptxNode>): PptxNodePromise {
-  return { $$pptxPromise: true, promise };
+export function createPptxNodePromise(
+  thunk: () => PptxNode | Promise<PptxNode>,
+): PptxNodePromise {
+  return { $pptxPromise: true, thunk };
 }
 
 export function isPptxNodePromise(value: unknown): value is PptxNodePromise {
-  return value != null && typeof value === "object" && (value as any).$$pptxPromise === true;
+  return value != null && typeof value === "object" && (value as any).$pptxPromise === true;
 }
 
-/** Resolve a PptxNodePromise or plain Promise<PptxNode>, otherwise return the node as-is. */
+/**
+ * Resolve a PptxNodePromise or plain Promise recursively until a concrete
+ * PptxNode (or primitive) is obtained.
+ *
+ * Resolution strategy:
+ * 1. PptxNodePromise → call `.thunk()` synchronously, then re-check
+ * 2. Promise (async component) → `await` it, then re-check
+ * 3. PptxNode or primitive → return as-is
+ *
+ * Why recursive?  With deferred component factories (jsx-runtime wraps ALL
+ * non-string component calls in PptxNodePromise), an async component like:
+ *
+ *   async function TitleSlide() {
+ *     return (<>...</>);  // jsx(Fragment, ...) returns PptxNodePromise
+ *   }
+ *
+ * produces Promise<PptxNodePromise> — the outer Promise from the `async`
+ * keyword, the inner PptxNodePromise from the JSX factory.  We need to
+ * unwrap both layers before we get a usable PptxNode.
+ */
 export async function resolveChild<T>(child: T): Promise<T extends PptxNodePromise ? PptxNode : T> {
-  if (isPptxNodePromise(child)) {
-    return (await child.promise) as any;
-  }
-  // Handle plain Promise<PptxNode> (e.g. from async component factories)
-  if (child instanceof Promise) {
-    return (await child) as any;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    if (isPptxNodePromise(child)) {
+      // Call thunk synchronously — the factory needs to run inside
+      // whatever AsyncLocalStorage context (slide / deck / group) the
+      // caller has set up.
+      child = child.thunk() as any;
+      continue;
+    }
+    if (child instanceof Promise) {
+      child = (await child) as any;
+      continue;
+    }
+    break;
   }
   return child as any;
 }
