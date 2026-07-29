@@ -80,9 +80,7 @@ export namespace JSX {
   export interface ElementChildrenAttribute {
     children: unknown;
   }
-  export interface IntrinsicElements {
-    [elementName: string]: ComponentProps & { children?: PptxChildren };
-  }
+  export interface IntrinsicElements {}
 }
 
 // ── Additional factory aliases (h / pptxElement / createElement) ──

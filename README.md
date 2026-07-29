@@ -70,6 +70,19 @@ async function main() {
 main();
 ```
 
+## Starter Template
+
+Get started instantly with the official starter repo:
+
+👉 **[pptxgen-ts-starter](https://github.com/zythum/pptxgen-ts-starter)** — A minimal TypeScript template preconfigured with `@zythum02/pptxgenjsx`, including tsconfig, a sample deck, and a ready-to-run build script.
+
+```bash
+npx degit zythum/pptxgen-ts-starter my-presentation
+cd my-presentation
+npm install
+npm run build
+```
+
 ## License
 
 MIT
