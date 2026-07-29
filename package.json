@@ -1,6 +1,6 @@
 {
   "name": "@zythum02/pptxgenjsx",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "JSX runtime for building PowerPoint presentations with pptxgenjs",
   "homepage": "https://github.com/zythum/pptxgenjsx#readme",
   "bugs": {
@@ -20,13 +20,13 @@
     "dist"
   ],
   "type": "module",
-  "main": "./dist/components.js",
-  "module": "./dist/components.js",
-  "types": "./dist/components.d.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/components.d.ts",
-      "default": "./dist/components.js"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./jsx-runtime": {
       "types": "./dist/jsx-runtime.d.ts",
@@ -47,8 +47,9 @@
     "pptxgenjs": "^4.0.1"
   },
   "devDependencies": {
+    "@types/node": "^24.13.3",
     "oxfmt": "^0.59.0",
     "oxlint": "^1.74.0",
-    "typescript": "^5.7.0"
+    "typescript": "^7.0.0"
   }
 }

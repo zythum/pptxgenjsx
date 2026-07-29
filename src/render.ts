@@ -17,6 +17,16 @@ import {
   resolveChild,
 } from "./node.js";
 
+import {
+  type SlideContextInfo,
+  type DeckContextInfo,
+  type GroupContextInfo,
+  useGroupContext,
+  withDeckContext,
+  withSlideContext,
+  withGroupContext,
+} from "./context.js";
+
 // ════════════════════════════════════════════════════════════════════
 // RENDERING ENGINE
 // ════════════════════════════════════════════════════════════════════
@@ -34,6 +44,7 @@ const RESERVED_PROPS = new Set([
   "cells",
   "eleId",
   "render",
+  "component",
 ]);
 
 // ── Shape type sets ───────────────────────────────────────────────
@@ -108,16 +119,58 @@ export async function createPptx(
 
   if (node.type === "Deck") {
     applyDeckProps(pptx, node.props as any);
-    await processDeckChildren(node, { pptx });
+
+    const total = countDeckSlides(node);
+    const width = (pptx as any).width ?? 13.333;
+    const height = (pptx as any).height ?? 7.5;
+
+    const ctx: SlideRenderContext = {
+      pptx,
+      slideIndex: 0,
+      total,
+      width,
+      height,
+    };
+
+    const deckCtx: DeckContextInfo = { width, height };
+
+    await withDeckContext(deckCtx, () => processDeckChildren(node, ctx));
     return pptx;
   }
 
   if (node.type === "Slide") {
-    await processSlide(node, { pptx });
+    const width = (pptx as any).width ?? 13.333;
+    const height = (pptx as any).height ?? 7.5;
+
+    const ctx: SlideRenderContext = {
+      pptx,
+      slideIndex: 0,
+      total: 1,
+      width,
+      height,
+    };
+
+    const deckCtx: DeckContextInfo = { width, height };
+
+    await withDeckContext(deckCtx, () => processSlide(node, ctx));
     return pptx;
   }
 
   throw new Error(`createPptx expected a Deck or Slide root, got ${node.type}.`);
+}
+
+// ── Slide counting ────────────────────────────────────────────────
+
+/** Count all `<Slide>` nodes in the node tree recursively. */
+function countDeckSlides(node: PptxNode): number {
+  if (node.type === "Slide") return 1;
+
+  let count = 0;
+  for (const rawChild of node.children) {
+    if (!isPptxNode(rawChild)) continue;
+    count += countDeckSlides(rawChild);
+  }
+  return count;
 }
 
 /**
@@ -189,7 +242,16 @@ function applyDeckProps(pptx: PptxPresentation, props: Record<string, any>): voi
 
 // ── Deck children traversal (async) ───────────────────────────────
 
-async function processDeckChildren(node: PptxNode, ctx: { pptx: PptxPresentation }): Promise<void> {
+/** Internal rendering context that carries slide counting state. */
+interface SlideRenderContext {
+  pptx: PptxPresentation;
+  slideIndex: number;
+  total: number;
+  width: number;
+  height: number;
+}
+
+async function processDeckChildren(node: PptxNode, ctx: SlideRenderContext): Promise<void> {
   for (const rawChild of node.children) {
     const child = await resolveChild(rawChild);
     if (!isPptxNode(child)) continue;
@@ -224,7 +286,7 @@ async function processDeckChildren(node: PptxNode, ctx: { pptx: PptxPresentation
 
 // ── Section ───────────────────────────────────────────────────────
 
-async function processSection(node: PptxNode, ctx: { pptx: PptxPresentation }): Promise<void> {
+async function processSection(node: PptxNode, ctx: SlideRenderContext): Promise<void> {
   const props = node.props as any;
   ctx.pptx.addSection({ title: props.title, order: props.order });
 
@@ -243,13 +305,21 @@ async function processSection(node: PptxNode, ctx: { pptx: PptxPresentation }): 
 
 async function processSlide(
   node: PptxNode,
-  ctx: { pptx: PptxPresentation },
+  ctx: SlideRenderContext,
   sectionTitle?: string,
 ): Promise<void> {
   const props = node.props as any;
+
+  // Increment and capture the 1-based slide index
+  ctx.slideIndex += 1;
+  const index = ctx.slideIndex;
+  const total = ctx.total;
+
+  const resolvedSectionTitle = props.sectionTitle ?? sectionTitle;
+
   const slide = ctx.pptx.addSlide({
     masterName: props.masterName,
-    sectionTitle: props.sectionTitle ?? sectionTitle,
+    sectionTitle: resolvedSectionTitle,
   });
 
   setIfDefined(slide, "background", props.background);
@@ -257,11 +327,32 @@ async function processSlide(
   setIfDefined(slide, "hidden", props.hidden);
   setIfDefined(slide, "slideNumber", props.slideNumber);
 
-  for (const rawChild of node.children) {
-    const child = await resolveChild(rawChild);
-    if (!isPptxNode(child)) continue;
-    await renderSlideElement(child, { ...ctx, slide });
+  const slideCtx: SlideContextInfo = {
+    index,
+    total,
+    sectionTitle: resolvedSectionTitle,
+  };
+
+  // ── Lazy `component` prop — like React Router's `component={() => import('./path')}` ──
+  if (props.component) {
+    const module = await props.component();
+    const LazyComponent = module.default;
+
+    // Wrap only the factory call in context — sync variable approach is safe
+    // because the factory's JSX-building phase executes synchronously.
+    const lazyNode = await withSlideContext(slideCtx, () => resolveChild(LazyComponent({})));
+    await renderSlideElement(lazyNode, { pptx: ctx.pptx, slide });
+    return;
   }
+
+  // ── Direct children ──
+  await withSlideContext(slideCtx, async () => {
+    for (const rawChild of node.children) {
+      const child = await resolveChild(rawChild);
+      if (!isPptxNode(child)) continue;
+      await renderSlideElement(child, { pptx: ctx.pptx, slide });
+    }
+  });
 }
 
 // ── Slide element rendering ───────────────────────────────────────
@@ -307,6 +398,26 @@ async function renderSlideElement(
     case "Raw":
       (node.props as any).render({ pptx: ctx.pptx, slide, node });
       break;
+    case "Group": {
+      const props = node.props as any;
+      const parentGroup = useGroupContext(); // deck fallback when not inside another group
+      const absX = resolveCoord(props.x, parentGroup.width, 0) + parentGroup.x;
+      const absY = resolveCoord(props.y, parentGroup.height, 0) + parentGroup.y;
+      const grpW = resolveCoord(props.w, parentGroup.width, parentGroup.width);
+      const grpH = resolveCoord(props.h, parentGroup.height, parentGroup.height);
+
+      const groupInfo: GroupContextInfo = { x: absX, y: absY, width: grpW, height: grpH };
+
+      await withGroupContext(groupInfo, async () => {
+        for (const rawChild of node.children) {
+          const child = await resolveChild(rawChild);
+          if (isPptxNode(child)) {
+            await renderSlideElement(child, ctx);
+          }
+        }
+      });
+      break;
+    }
     case "Fragment":
       for (const rawChild of node.children) {
         const child = await resolveChild(rawChild);
@@ -320,30 +431,86 @@ async function renderSlideElement(
   }
 }
 
+// ── Coordinate helpers ─────────────────────────────────────────────
+
+/**
+ * Resolve a pptxgenjs Coord (number or `${number}%`) to an absolute
+ * number using a reference dimension (e.g. group width for x / w,
+ * group height for y / h).
+ *
+ * - `5`       → 5
+ * - `"50%"`   → `0.5 * reference`
+ * - `undefined` / `null` → `fallback` (default 0)
+ */
+function resolveCoord(
+  value: number | `${number}%` | undefined | null,
+  reference: number,
+  fallback: number = 0,
+): number {
+  if (value == null) return fallback;
+  if (typeof value === "number") return value;
+  // `${number}%` — e.g. "50%"
+  const pct = parseFloat(value);
+  if (isNaN(pct)) return fallback;
+  if (!isFinite(pct)) return fallback;
+  return (pct / 100) * reference;
+}
+
+/**
+ * Apply the current group's absolute x/y offset to an element's props.
+ * Percentage-based Coord values (e.g. `"50%"`) are resolved relative to
+ * the group's virtual canvas **before** adding the group offset.
+ * When no group is active (i.e., direct slide children), returns the
+ * props unchanged — percentages pass through to pptxgenjs natively.
+ */
+function offsetXY<T extends Record<string, any>>(props: T): T {
+  const { x: groupX, y: groupY, width: grpW, height: grpH } = useGroupContext();
+  if (
+    groupX === 0 &&
+    groupY === 0 &&
+    typeof props.x !== "string" &&
+    typeof props.y !== "string" &&
+    typeof props.w !== "string" &&
+    typeof props.h !== "string"
+  ) {
+    return { ...props };
+  }
+  const resolvedX = resolveCoord(props.x, grpW, 0);
+  const resolvedY = resolveCoord(props.y, grpH, 0);
+  const resolvedW = resolveCoord(props.w, grpW, props.w);
+  const resolvedH = resolveCoord(props.h, grpH, props.h);
+  return { ...props, x: resolvedX + groupX, y: resolvedY + groupY, w: resolvedW, h: resolvedH };
+}
+
 // ── Individual element renderers ──────────────────────────────────
 
 function renderText(node: PptxNode, slide: PptxSlide): void {
-  const props = node.props as any;
+  const props = offsetXY(node.props as any);
   const textRuns = collectTextRuns(node) ?? props.text ?? getTextContent(node);
   slide.addText(textRuns, mergeOptions(props.options, props));
 }
 
 function renderShape(node: PptxNode, slide: PptxSlide): void {
-  const props = node.props as any;
+  const props = offsetXY(node.props as any);
   slide.addShape(props.shape, mergeOptions(props.options, props, ["shape"]));
 }
 
 function renderLine(node: PptxNode, slide: PptxSlide): void {
-  const props = node.props as any;
+  const props = offsetXY(node.props as any);
   slide.addShape("line", mergeOptions(props.options, props));
 }
 
 function renderLineBetween(node: PptxNode, slide: PptxSlide): void {
+  const { x: ox, y: oy, width: grpW, height: grpH } = useGroupContext();
   const props = node.props as any;
-  const x = Math.min(props.x1, props.x2);
-  const y = Math.min(props.y1, props.y2);
-  const w = Math.abs(props.x2 - props.x1);
-  const h = Math.abs(props.y2 - props.y1);
+  const x1 = resolveCoord(props.x1, grpW, 0) + ox;
+  const y1 = resolveCoord(props.y1, grpH, 0) + oy;
+  const x2 = resolveCoord(props.x2, grpW, 0) + ox;
+  const y2 = resolveCoord(props.y2, grpH, 0) + oy;
+  const x = Math.min(x1, x2);
+  const y = Math.min(y1, y2);
+  const w = Math.abs(x2 - x1);
+  const h = Math.abs(y2 - y1);
 
   slide.addShape("line", {
     ...mergeOptions(props.options, props, ["x1", "y1", "x2", "y2"]),
@@ -351,23 +518,23 @@ function renderLineBetween(node: PptxNode, slide: PptxSlide): void {
     y,
     w,
     h,
-    flipH: props.x2 < props.x1,
-    flipV: props.y2 < props.y1,
+    flipH: x2 < x1,
+    flipV: y2 < y1,
   });
 }
 
 function renderImage(node: PptxNode, slide: PptxSlide): void {
-  const props = node.props as any;
+  const props = offsetXY(node.props as any);
   slide.addImage(mergeOptions(props.options, props));
 }
 
 function renderMedia(node: PptxNode, slide: PptxSlide): void {
-  const props = node.props as any;
+  const props = offsetXY(node.props as any);
   slide.addMedia(mergeOptions(props.options, props) as any);
 }
 
 function renderChart(node: PptxNode, slide: PptxSlide): void {
-  const props = node.props as any;
+  const props = offsetXY(node.props as any);
   slide.addChart(
     props.type,
     deepClone(props.data),
@@ -376,7 +543,7 @@ function renderChart(node: PptxNode, slide: PptxSlide): void {
 }
 
 function renderTable(node: PptxNode, slide: PptxSlide): void {
-  const props = node.props as any;
+  const props = offsetXY(node.props as any);
   const rows =
     props.rows ??
     node.children
@@ -584,6 +751,7 @@ const DECK_CHILDREN = new Set([
 const SECTION_CHILDREN = new Set(["Slide", "Fragment"]);
 
 const SLIDE_CHILDREN = new Set([
+  "Group",
   "Text",
   "Shape",
   "Rect",
@@ -726,13 +894,18 @@ function validateNodeProps(node: PptxNode, path: string, issues: ValidationIssue
   }
 
   if (node.type === "LineBetween") {
-    for (const key of ["x1", "y1", "x2", "y2"]) {
-      if (typeof props[key] !== "number" || Number.isNaN(props[key])) {
+    for (const key of ["x1", "y1", "x2", "y2"] as const) {
+      const val = props[key];
+      if (
+        val == null ||
+        (typeof val !== "number" && typeof val !== "string") ||
+        (typeof val === "number" && Number.isNaN(val))
+      ) {
         issues.push({
           code: "line.endpoint.invalid",
           level: "error",
           path,
-          message: `LineBetween requires numeric ${key} in PPT inches.`,
+          message: `LineBetween requires ${key} to be a Coord (number or percentage string).`,
         });
       }
     }

@@ -14,6 +14,7 @@ import type PptxGenJSType from "pptxgenjs";
 
 import {
   type ComponentFactory,
+  type ComponentProps,
   type PptxChildren,
   type PptxNode,
   type PptxNodePromise,
@@ -64,13 +65,27 @@ export type DeckProps = {
 
 // ── Structure: Slide, Layout, Section, Master, Placeholder ───────
 
+/** A lazy component import — analogous to React Router's `component={() => import('./path')}`.
+ * The function returns a Promise resolving to a module whose `default` export is a
+ * {@link ComponentFactory}. The component is loaded and rendered during `createPptx()`.
+ */
+export type ComponentImport<P extends ComponentProps = ComponentProps> = () => Promise<{
+  default: ComponentFactory<P>;
+}>;
+
 /** Props for `<Slide>`. Maps to `pptx.addSlide()`.
- * Supports background, visibility, slide number format, and layout selection.
+ * Supports background, visibility, slide number format, layout selection,
+ * and a lazy `component` prop for code-split slide definitions.
  */
 export type SlideProps = Partial<
   Pick<PptxGenJSType.PresSlide, "background" | "color" | "hidden" | "slideNumber">
 > &
   PptxGenJSType.AddSlideProps & {
+    /** Lazy-loaded component factory. Accepts `() => import('./path')` — the loaded
+     * module's `default` export is called as a component factory during rendering.
+     * When provided, the component result replaces direct children for slide content.
+     */
+    component?: ComponentImport;
     children?: PptxChildren;
   };
 
@@ -154,14 +169,14 @@ export type LineProps = Omit<ShapeProps, "shape">;
  * Pass start/end points via `x1`/`y1`/`x2`/`y2`.
  */
 export type LineBetweenProps = Omit<LineProps, "x" | "y" | "w" | "h" | "flipH" | "flipV"> & {
-  /** Start x coordinate in PPT inches. */
-  x1: number;
-  /** Start y coordinate in PPT inches. */
-  y1: number;
-  /** End x coordinate in PPT inches. */
-  x2: number;
-  /** End y coordinate in PPT inches. */
-  y2: number;
+  /** Start x coordinate. Supports inches (number) or percentage of group/parent width (`${number}%`). */
+  x1: PptxGenJSType.Coord;
+  /** Start y coordinate. Supports inches (number) or percentage of group/parent height (`${number}%`). */
+  y1: PptxGenJSType.Coord;
+  /** End x coordinate. Supports inches (number) or percentage of group/parent width (`${number}%`). */
+  x2: PptxGenJSType.Coord;
+  /** End y coordinate. Supports inches (number) or percentage of group/parent height (`${number}%`). */
+  y2: PptxGenJSType.Coord;
 };
 
 /** Shared shape-options base for all named shape components. */
@@ -363,6 +378,12 @@ export type TableToSlidesProps = PptxGenJSType.TableToSlidesProps & {
   eleId: string;
   /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.TableToSlidesProps;
+};
+
+// ── Group (logical container) ──────────────────────────────────────
+
+export type GroupProps = PptxGenJSType.PositionProps & {
+  children?: PptxChildren;
 };
 
 // ── Escape hatch ──────────────────────────────────────────────────
@@ -652,3 +673,11 @@ export const TableToSlides = component("TableToSlides") as ComponentFactory<Tabl
  * Provides direct access via a custom render callback.
  * Maps to the `<Raw>` custom render protocol. */
 export const Raw = component("Raw") as ComponentFactory<RawProps>;
+
+// ── Group ─────────────────────────────────────────────────────────
+
+/** Logical container — child coordinates are relative to the group's
+ * top-left corner.  Uses `useGroupContext()` for nested positioning.
+ * Maps to a coordinate-transform during rendering (no PptxGenJS
+ * equivalent). */
+export const Group = component("Group") as ComponentFactory<GroupProps>;

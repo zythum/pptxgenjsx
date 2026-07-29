@@ -27,10 +27,14 @@ export function isPptxNodePromise(value: unknown): value is PptxNodePromise {
   return value != null && typeof value === "object" && (value as any).$$pptxPromise === true;
 }
 
-/** Resolve a PptxNodePromise if present, otherwise return the node as-is. */
+/** Resolve a PptxNodePromise or plain Promise<PptxNode>, otherwise return the node as-is. */
 export async function resolveChild<T>(child: T): Promise<T extends PptxNodePromise ? PptxNode : T> {
   if (isPptxNodePromise(child)) {
     return (await child.promise) as any;
+  }
+  // Handle plain Promise<PptxNode> (e.g. from async component factories)
+  if (child instanceof Promise) {
+    return (await child) as any;
   }
   return child as any;
 }
