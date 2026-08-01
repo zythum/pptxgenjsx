@@ -17,6 +17,10 @@ import {
   createPptxNodePromise,
 } from "./node.js";
 
+// ── JSX Key ───────────────────────────────────────────────────
+
+export type Key = string | number | bigint;
+
 // ── JSX factory ───────────────────────────────────────────────────
 
 /**
@@ -27,10 +31,10 @@ import {
  */
 export function jsx<P extends ComponentProps>(
   Component: ComponentFactory<P> | string,
-  props: P & { children?: PptxChildren },
-  _key?: string,
+  props: P & { key?: Key; children?: PptxChildren },
+  _key?: Key | null,
 ): PptxElement {
-  const { children, ...rest } = props ?? ({} as any);
+  const { children, key: _unusedKey, ...rest } = props ?? ({} as any);
   const flatChildren = flattenChildren(children);
 
   if (typeof Component === "string") {
@@ -98,6 +102,14 @@ export namespace JSX {
   export interface ElementChildrenAttribute {
     children: unknown;
   }
+  /**
+   * React compatibility: allow `key` on every JSX element so that
+   * React-style code (e.g. `key` inside `.map()` loops) type-checks.
+   * The key is stripped at runtime and has no effect on rendering.
+   */
+  export interface IntrinsicAttributes {
+    key?: Key | null;
+  }
   export interface IntrinsicElements {}
 }
 
@@ -109,10 +121,10 @@ export namespace JSX {
  */
 export function h<P extends ComponentProps>(
   Component: ComponentFactory<P>,
-  props: P | null,
+  props: (P & { key?: Key | null }) | null,
   ...children: PptxChild[]
 ): PptxElement {
-  return jsx(Component, { ...(props ?? ({} as P)), children } as any);
+  return jsx(Component, { ...props, children } as any, props?.key);
 }
 
 /** Alias that avoids shadowing the `h` (height) prop. */
