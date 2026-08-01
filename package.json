@@ -1,6 +1,6 @@
 {
   "name": "@zythum02/pptxgenjsx",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "JSX runtime for building PowerPoint presentations with pptxgenjs",
   "homepage": "https://github.com/zythum/pptxgenjsx#readme",
   "bugs": {
