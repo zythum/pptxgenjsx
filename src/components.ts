@@ -17,12 +17,8 @@ import {
   type ComponentProps,
   type PptxChildren,
   type PptxNode,
-  type PptxNodePromise,
   createNode,
 } from "./node.js";
-
-// Re-export core types
-export type { PptxNode, PptxNodePromise };
 
 // ════════════════════════════════════════════════════════════════════
 // COMPONENT PROPS TYPE DEFINITIONS

@@ -38,9 +38,7 @@ export interface PptxNodePromise {
   readonly thunk: () => PptxNode | Promise<PptxNode>;
 }
 
-export function createPptxNodePromise(
-  thunk: () => PptxNode | Promise<PptxNode>,
-): PptxNodePromise {
+export function createPptxNodePromise(thunk: () => PptxNode | Promise<PptxNode>): PptxNodePromise {
   return { $pptxPromise: true, thunk };
 }
 

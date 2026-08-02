@@ -576,9 +576,7 @@ function renderChart(node: PptxNode, slide: PptxSlide): void {
 
 async function renderTable(node: PptxNode, slide: PptxSlide): Promise<void> {
   const props = offsetXY(node.props as any);
-  const rows =
-    props.rows ??
-    await resolveTableRows(node);
+  const rows = props.rows ?? (await resolveTableRows(node));
   slide.addTable(deepClone(rows), mergeOptions(props.options, props));
 }
 

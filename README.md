@@ -111,12 +111,12 @@ Use the `layout` prop to control slide dimensions. Two forms are supported:
 
 **1. Built-in layout name** (string) — pptxgenjs provides four standard presets:
 
-| Name | Dimensions | Aspect Ratio |
-|------|-----------|--------------|
-| `"LAYOUT_4x3"` | 10" × 7.5" | 4:3 |
-| `"LAYOUT_16x9"` | 10" × 5.625" | 16:9 |
-| `"LAYOUT_16x10"` | 10" × 6.25" | 16:10 |
-| `"LAYOUT_WIDE"` | 13.33" × 7.5" | 16:9 (wide) |
+| Name             | Dimensions    | Aspect Ratio |
+| ---------------- | ------------- | ------------ |
+| `"LAYOUT_4x3"`   | 10" × 7.5"    | 4:3          |
+| `"LAYOUT_16x9"`  | 10" × 5.625"  | 16:9         |
+| `"LAYOUT_16x10"` | 10" × 6.25"   | 16:10        |
+| `"LAYOUT_WIDE"`  | 13.33" × 7.5" | 16:9 (wide)  |
 
 Default: `"LAYOUT_WIDE"` (13.33" × 7.5").
 
@@ -205,44 +205,46 @@ All pptxgenjs shapes are available as JSX components. Each supports standard pos
 
 ```tsx
 <LineBetween
-  x1={0} y1={0}
-  x2={13.333} y2={7.5}
+  x1={0}
+  y1={0}
+  x2={13.333}
+  y2={7.5}
   line={{ color: "999999", width: 1, dashType: "dash" }}
 />
 ```
 
 Available shape components:
 
-| Component | pptxgenjs shape |
-|-----------|----------------|
-| `Rect` | `rect` |
-| `RoundRect` | `roundRect` |
-| `Ellipse` / `Oval` | `ellipse` |
-| `Triangle` | `triangle` |
-| `RightTriangle` | `rtTriangle` |
-| `Diamond` | `diamond` |
-| `Pentagon` | `pentagon` |
-| `Hexagon` | `hexagon` |
-| `Star` / `Star5` | `star5` |
-| `Star4` | `star4` |
-| `Star6` | `star6` |
-| `Star8` | `star8` |
-| `Star10` | `star10` |
-| `Line` | `line` |
-| `LineBetween` | `line` (with computed bounding box) |
-| `Arc` | `arc` |
-| `BlockArc` | `blockArc` |
-| `PieShape` | `pie` |
-| `CustomGeometry` | `custGeom` |
-| `LeftArrow` / `RightArrow` | `leftArrow` / `rightArrow` |
-| `UpArrow` / `DownArrow` | `upArrow` / `downArrow` |
-| `LeftRightArrow` | `leftRightArrow` |
-| `UpDownArrow` | `upDownArrow` |
-| `Chevron` | `chevron` |
-| `Cloud` | `cloud` |
-| `Heart` | `heart` |
-| `Donut` | `donut` |
-| `Plus` | `plus` |
+| Component                  | pptxgenjs shape                     |
+| -------------------------- | ----------------------------------- |
+| `Rect`                     | `rect`                              |
+| `RoundRect`                | `roundRect`                         |
+| `Ellipse` / `Oval`         | `ellipse`                           |
+| `Triangle`                 | `triangle`                          |
+| `RightTriangle`            | `rtTriangle`                        |
+| `Diamond`                  | `diamond`                           |
+| `Pentagon`                 | `pentagon`                          |
+| `Hexagon`                  | `hexagon`                           |
+| `Star` / `Star5`           | `star5`                             |
+| `Star4`                    | `star4`                             |
+| `Star6`                    | `star6`                             |
+| `Star8`                    | `star8`                             |
+| `Star10`                   | `star10`                            |
+| `Line`                     | `line`                              |
+| `LineBetween`              | `line` (with computed bounding box) |
+| `Arc`                      | `arc`                               |
+| `BlockArc`                 | `blockArc`                          |
+| `PieShape`                 | `pie`                               |
+| `CustomGeometry`           | `custGeom`                          |
+| `LeftArrow` / `RightArrow` | `leftArrow` / `rightArrow`          |
+| `UpArrow` / `DownArrow`    | `upArrow` / `downArrow`             |
+| `LeftRightArrow`           | `leftRightArrow`                    |
+| `UpDownArrow`              | `upDownArrow`                       |
+| `Chevron`                  | `chevron`                           |
+| `Cloud`                    | `cloud`                             |
+| `Heart`                    | `heart`                             |
+| `Donut`                    | `donut`                             |
+| `Plus`                     | `plus`                              |
 
 ### Charts
 
@@ -272,9 +274,7 @@ Available chart components: `AreaChart`, `BarChart`, `Bar3DChart`, `BubbleChart`
 ```tsx
 <Table x={1} y={1} w={10} h={3} fontSize={12} border={{ type: "solid", color: "CCCCCC" }}>
   <TableRow>
-    <TableCell options={{ fill: { color: "4472C4" }, color: "FFFFFF", bold: true }}>
-      Name
-    </TableCell>
+    <TableCell options={{ fill: { color: "4472C4" }, color: "FFFFFF", bold: true }}>Name</TableCell>
     <TableCell options={{ fill: { color: "4472C4" }, color: "FFFFFF", bold: true }}>
       Value
     </TableCell>
@@ -370,8 +370,12 @@ export default function TitleSlide() {
 <Slide>
   {items.map((item) => (
     <Fragment key={item.id}>
-      <Text x={1} y={item.y}>{item.name}</Text>
-      <Text x={5} y={item.y}>{item.value}</Text>
+      <Text x={1} y={item.y}>
+        {item.name}
+      </Text>
+      <Text x={5} y={item.y}>
+        {item.value}
+      </Text>
     </Fragment>
   ))}
 </Slide>
@@ -409,7 +413,7 @@ export default async function DataSlide() {
 await renderPptx(
   <Deck>
     <Slide>{/* ... */}</Slide>
-    <DataSlide />   {/* async — resolves automatically */}
+    <DataSlide /> {/* async — resolves automatically */}
   </Deck>,
   { fileName: "output.pptx" },
 );
@@ -563,9 +567,7 @@ You can also use `<Placeholder>` inside masters:
 
 ```tsx
 <Master name="content">
-  <Placeholder
-    options={{ name: "Body", type: "body", x: 1, y: 1, w: 10, h: 5 }}
-  />
+  <Placeholder options={{ name: "Body", type: "body", x: 1, y: 1, w: 10, h: 5 }} />
 </Master>
 ```
 
@@ -614,8 +616,8 @@ Additional pptxgenjs `writeFile` options are also supported:
 ```tsx
 await renderPptx(<Deck>{/* ... */}</Deck>, {
   fileName: "output.pptx",
-  compression: true,       // Enable ZIP compression
-  zipOptions: { level: 9 },// Compression level
+  compression: true, // Enable ZIP compression
+  zipOptions: { level: 9 }, // Compression level
 });
 ```
 
