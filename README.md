@@ -185,11 +185,76 @@ A single slide. Maps to `pptx.addSlide()`.
 </Text>
 ```
 
-**`<TextRun>`** — a single formatted run inside `<Text>`. `options` accepts pptxgenjs `TextProps` (fontSize, color, bold, italic, fontFace, etc.).
+**`<TextRun>`** — a single formatted run inside `<Text>`. `options` accepts pptxgenjs `TextProps` (fontSize, color, bold, italic, fontFace, etc.). The run's text comes from its string children (or the `text` prop):
+
+```tsx
+<TextRun options={{ fontSize: 18, color: "0066CC", bold: true }}>bold and blue</TextRun>
+```
+
+**Text input modes.** A `<Text>` element has four ways to receive content. When more than one is present, this priority applies (higher wins, the rest is ignored):
+
+1. child `<TextRun />` nodes — plain string/number children mixed among them are converted to default-style runs (order preserved)
+2. the `runs` prop (rich text array — same shape as pptxgenjs `TextProps[]`)
+3. the `text` prop
+4. plain-string children
+
+Plain strings mix freely with `<TextRun />` children — each string segment becomes a default-style run in place:
+
+```tsx
+<Text x={1} y={4} w={8} h={1}>
+  {"Normal segment "}
+  <TextRun options={{ color: "0066CC", bold: true }}>highlighted</TextRun>
+</Text>
+```
+
+Whitespace-only text between elements (e.g. from multi-line JSX formatting) is ignored — attach explicit spaces to a run's text (`<TextRun>A </TextRun>`) instead. Mixing the other modes (e.g. `runs` or `text` props alongside children) still drops the lower-priority content.
+
+```tsx
+// runs prop (imperative rich text)
+<Text
+  x={1}
+  y={1}
+  w={8}
+  h={1}
+  runs={[
+    { text: "Normal ", options: { fontSize: 18 } },
+    { text: "bold", options: { fontSize: 18, bold: true } },
+  ]}
+/>
+```
+
+**Text with a shape background.** `shape` is a valid pptxgenjs text option and is forwarded to `slide.addText()`:
+
+```tsx
+<Text
+  x={1}
+  y={1}
+  w={4}
+  h={2}
+  shape="roundRect"
+  fill={{ color: "EDE9FE" }}
+  margin={18} // text margin uses POINTS (~0.25"), not inches
+  valign="middle"
+>
+  Shaped text box
+</Text>
+```
+
+> Note: pptxgenjs text `margin` values are in **points** (e.g. `18` ≈ 0.25"), not inches.
 
 ### Shapes
 
 All pptxgenjs shapes are available as JSX components. Each supports standard positioning props (`x`, `y`, `w`, `h`) plus shape-specific options via `options` or as top-level props.
+
+> **Shapes are leaf elements** — they do not render children. Nested content
+> (e.g. `<RoundRect><Text>…</Text></RoundRect>`) is a compile-time error in TSX
+> and a hard runtime error otherwise; it is never silently dropped.
+>
+> To put text on a shape, use **one** of:
+>
+> 1. A single text box with a shape background: `<Text shape="roundRect" …>` (recommended when the text and shape share one box — see [Text & TextRun](#text--textrun)).
+> 2. A sibling `<Text>` layered over the shape (when text and shape need independent styles/shadows/geometry).
+> 3. A `<Group>` only when you need a relative coordinate system or want to move/scale the pair together.
 
 ```tsx
 <Rect x={0} y={0} w={13.333} h={7.5} fill={{ color: "1E1E2E" }} />
@@ -342,6 +407,10 @@ For pptxgenjs features not covered by a dedicated component.
 />
 ```
 
+> Raw children are **not** auto-rendered — they are only accessible via
+> `context.node.children` inside the `render` callback. Use props for
+> configuration; use children only when the callback reads them itself.
+
 ### Fragment
 
 Groups multiple children without producing a wrapper element. Useful when a component needs to return multiple siblings (e.g., in a lazy-loaded slide or inside a map).
@@ -367,6 +436,8 @@ export default function TitleSlide() {
 **Explicit `<Fragment>`** — when you need a `key` prop (e.g., in a `.map()` loop):
 
 ```tsx
+import { Fragment } from "@zythum02/pptxgenjsx";
+
 <Slide>
   {items.map((item) => (
     <Fragment key={item.id}>
@@ -378,7 +449,7 @@ export default function TitleSlide() {
       </Text>
     </Fragment>
   ))}
-</Slide>
+</Slide>;
 ```
 
 > **Note**: `<>...</>` is a JSX compile-time syntax — it does not support props like `key`. For dynamic lists, always use `<Fragment key={...}>`.
@@ -571,17 +642,15 @@ You can also use `<Placeholder>` inside masters:
 </Master>
 ```
 
----
-
 ## Validation
 
-The `validateDeck()` function checks your slide tree for common mistakes before rendering:
+The `validateDeck()` function checks your slide tree for common mistakes before rendering. It is **async** — always `await` it:
 
 ```tsx
 import { validateDeck } from "@zythum02/pptxgenjsx/render";
 
 const deck = <Deck>{/* ... */}</Deck>;
-const issues = validateDeck(deck);
+const issues = await validateDeck(deck);
 
 if (issues.length > 0) {
   for (const issue of issues) {
@@ -593,8 +662,10 @@ if (issues.length > 0) {
 Validation catches:
 
 - Invalid child types (e.g., a `<Text>` directly inside a `<Deck>`)
+- **Leaf components with children** (`child.leaf`, e.g. `<RoundRect>` containing a `<Text>`)
 - Missing required props (e.g., `CustomGeometry` without `points`)
 - Suspicious prop usage (e.g., `angleRange` on `RoundRect`)
+- Mixed `<Text>` input modes (`text.input.mixed`) — warns whenever a lower-priority source would be ignored and recommends `<TextRun />` children for rich text
 - Invalid `LineBetween` endpoints
 
 ---

@@ -1,7 +1,9 @@
 /**
  * JSX runtime for pptxgenjsx.
  *
- * Provides jsx/jsxs/jsxDEV/Fragment for TypeScript's `react-jsx` transform.
+ * Provides jsx/jsxs/jsxDEV for TypeScript's `react-jsx` transform, plus
+ * Fragment (re-exported from node.js — the core model — so both this
+ * subpath and the package entry expose the same value).
  * Async component factories are wrapped in PptxNodePromise for lazy resolution
  * during tree traversal (in render.ts).
  */
@@ -28,13 +30,21 @@ export type Key = string | number | bigint;
  *
  * If the Component returns a Promise (async component), it is wrapped in
  * a PptxNodePromise and resolved lazily during `createPptx` traversal.
+ *
+ * Note on the props type: the public signature intentionally does NOT add
+ * `children` unconditionally. Whether an element accepts children is
+ * decided by the component's own props type (container props declare
+ * `children`, leaf props use `children?: never`).  The runtime still
+ * destructures whatever `children` the JSX transform passes in.
  */
 export function jsx<P extends ComponentProps>(
   Component: ComponentFactory<P> | string,
-  props: P & { key?: Key; children?: PptxChildren },
+  props: P & { key?: Key },
   _key?: Key | null,
 ): PptxElement {
-  const { children, key: _unusedKey, ...rest } = props ?? ({} as any);
+  // Cast to any: the JSX transform may pass `children` even when the
+  // component's public props type does not declare it (leaf components).
+  const { children, key: _unusedKey, ...rest } = (props ?? {}) as any;
   const flatChildren = flattenChildren(children);
 
   if (typeof Component === "string") {
@@ -84,11 +94,10 @@ export const jsxDEV: typeof jsx = jsx;
 
 // ── Fragment ──────────────────────────────────────────────────────
 
-export function Fragment(props: { children?: PptxChildren }): PptxNode<"Fragment", {}> {
-  return createNode("Fragment", {
-    children: flattenChildren(props.children),
-  });
-}
+// Re-export from the core model (node.ts) so both the JSX runtime subpath
+// and the package entry expose the same Fragment value.  TypeScript's
+// `jsxImportSource` transform imports Fragment from this subpath for `<>`.
+export { Fragment } from "./node.js";
 
 // ── JSX namespace for TypeScript ──────────────────────────────────
 

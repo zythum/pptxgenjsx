@@ -6,7 +6,18 @@
  * @module pptxgenjsx
  */
 
-export type { PptxNode, PptxNodePromise, PptxChildren } from "./node.js";
+export { Fragment } from "./node.js";
+export type {
+  ComponentFactory,
+  ComponentProps,
+  ContainerProps,
+  LeafProps,
+  PptxNode,
+  PptxChild,
+  PptxChildren,
+  PptxNodePromise,
+  PrimitiveChild,
+} from "./node.js";
 export { useSlideContext, useDeckContext, useGroupContext } from "./context.js";
 export type { SlideContextInfo, DeckContextInfo, GroupContextInfo } from "./context.js";
 export * from "./components.js";

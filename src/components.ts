@@ -17,6 +17,7 @@ import {
   type ComponentProps,
   type PptxChildren,
   type PptxNode,
+  type LeafProps,
   createNode,
 } from "./node.js";
 
@@ -86,7 +87,7 @@ export type SlideProps = Partial<
   };
 
 /** Props for `<Layout>`. Maps to `pptx.defineLayout()`. */
-export type LayoutProps = PptxGenJSType.PresLayout;
+export type LayoutProps = PptxGenJSType.PresLayout & LeafProps;
 
 /** Props for `<Section>`. Maps to `pptx.addSection()`. */
 export type SectionProps = PptxGenJSType.SectionProps & {
@@ -113,14 +114,30 @@ export type PlaceholderProps = {
 
 /** Props for `<TextRun>` — a single formatted run inside `<Text>`.
  * Maps to an entry in the `TextProps[]` array passed to `slide.addText()`.
+ *
+ * The run's text comes from the `text` prop or, when absent, from the
+ * element's string/number children: `<TextRun options={{ bold: true }}>Bold</TextRun>`.
  */
-export type TextRunProps = PptxGenJSType.TextProps;
+export type TextRunProps = PptxGenJSType.TextProps & {
+  /** Run text. Falls back to string/number children. */
+  children?: string | number | Array<string | number>;
+};
 
 /** Props for `<Text>` — a text box, rich text container, or text inside a shape.
  * Maps to `slide.addText(text, options)`.
  *
- * Provide text via the `text` prop, as child `<TextRun />` nodes, as
- * plain-string children, or via the `runs` prop for rich text arrays.
+ * Text can come from one of four sources. When more than one is present,
+ * the following priority applies (higher wins, the rest is ignored):
+ *
+ * 1. child `<TextRun />` nodes — plain string/number children mixed among
+ *    them are converted to default-style runs (order preserved)
+ * 2. the `runs` prop (rich text array)
+ * 3. the `text` prop
+ * 4. plain-string children
+ *
+ * Plain strings mix freely with `<TextRun />` children (each becomes a
+ * default-style run in place; whitespace-only text between elements is
+ * ignored). Mixing the other modes drops the lower-priority content.
  */
 export type TextProps = Omit<PptxGenJSType.TextPropsOptions, "children"> & {
   /** Text string or rich-text array passed to `slide.addText`. Falls back to children strings. */
@@ -153,7 +170,7 @@ export type ShapeProps = Omit<PptxGenJSType.ShapeProps, "children"> & {
   shape: PptxGenJSType.SHAPE_NAME;
   /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.ShapeProps;
-};
+} & LeafProps;
 
 /** Props for `<Line>` — a simple line shape.
  * Maps to `slide.addShape("line", options)`. For lines defined by two
@@ -179,7 +196,7 @@ export type LineBetweenProps = Omit<LineProps, "x" | "y" | "w" | "h" | "flipH" |
 export type ShapeOptionsProps = Omit<PptxGenJSType.ShapeProps, "children"> & {
   /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.ShapeProps;
-};
+} & LeafProps;
 
 /** Props for `<Rect>`. Maps to `slide.addShape("rect", options)`. */
 export type RectProps = ShapeOptionsProps;
@@ -285,7 +302,7 @@ export type CustomGeometryProps = ShapeOptionsProps & {
 export type ImageProps = PptxGenJSType.ImageProps & {
   /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.ImageProps;
-};
+} & LeafProps;
 
 /** Props for `<Media>` — audio, video, or online media.
  * Maps to `slide.addMedia(options)`.
@@ -293,7 +310,7 @@ export type ImageProps = PptxGenJSType.ImageProps & {
 export type MediaProps = PptxGenJSType.MediaProps & {
   /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.MediaProps;
-};
+} & LeafProps;
 
 // ── Charts ────────────────────────────────────────────────────────
 
@@ -309,7 +326,7 @@ export type ChartProps = Omit<PptxGenJSType.IChartOpts, "children"> & {
   data: PptxGenJSType.OptsChartData[];
   /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.IChartOpts;
-};
+} & LeafProps;
 
 /** Props shared by typed chart components. */
 export type TypedChartProps = Omit<ChartProps, "type">;
@@ -374,7 +391,7 @@ export type TableToSlidesProps = PptxGenJSType.TableToSlidesProps & {
   eleId: string;
   /** Options forwarded to the underlying PptxGenJS API call. */
   options?: PptxGenJSType.TableToSlidesProps;
-};
+} & LeafProps;
 
 // ── Group (logical container) ──────────────────────────────────────
 
@@ -390,6 +407,10 @@ export type GroupProps = PptxGenJSType.PositionProps & {
 export type RawProps = {
   /** Custom render callback invoked during rendering. Supports sync or async. */
   render: (context: RenderContext) => void | Promise<void>;
+  /** Raw children are NOT auto-rendered. They are only accessible via
+   * `context.node.children` inside the `render` callback — an escape
+   * hatch for fully custom content. */
+  children?: PptxChildren;
 };
 
 /** Context passed to the `<Raw>` render callback. */
