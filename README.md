@@ -1,5 +1,7 @@
 # @zythum02/pptxgenjsx
 
+English | [中文](./README_CN.md)
+
 A JSX runtime for building PowerPoint presentations with [pptxgenjs](https://github.com/gitbrent/pptxgenjs). Write your slides as JSX components and render them to `.pptx` files.
 
 ```tsx
